@@ -27,72 +27,23 @@ limitations under the License.
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#define CAPTURE_THREAD_EXPERIMENTAL
 #include "thread-capture.h"
-#undef CAPTURE_THREAD_EXPERIMENTAL
+#include "thread-crosser.h"
 
 #include "callback-queue.h"
 #include "log-text.h"
 #include "log-values.h"
 
-using common::CallbackQueue;
 using testing::ElementsAre;
 
 namespace capture_thread {
 
-TEST(ThreadCaptureTest, NoLoggerInterferenceWithDifferentTypes) {
-  LogText::Log("not logged");
-  LogValues::Count(0);
-  {
-    LogTextSingleThread text_logger;
-    LogText::Log("logged 1");
-    {
-      LogValuesSingleThread count_logger;
-      LogValues::Count(1);
-      LogText::Log("logged 2");
-      EXPECT_THAT(count_logger.GetCounts(), ElementsAre(1));
-    }
-    LogText::Log("logged 3");
-    EXPECT_THAT(text_logger.GetLines(),
-                ElementsAre("logged 1", "logged 2", "logged 3"));
-  }
-}
-
-TEST(ThreadCaptureTest, SameTypeOverrides) {
-  LogTextSingleThread text_logger1;
-  LogText::Log("logged 1");
-  {
-    LogTextSingleThread text_logger2;
-    LogText::Log("logged 2");
-    EXPECT_THAT(text_logger2.GetLines(), ElementsAre("logged 2"));
-  }
-  LogText::Log("logged 3");
-  EXPECT_THAT(text_logger1.GetLines(), ElementsAre("logged 1", "logged 3"));
-}
-
-TEST(ThreadCaptureTest, ThreadsAreNotCrossed) {
-  LogTextSingleThread logger;
-  LogText::Log("logged 1");
-
-  std::thread worker([] { LogText::Log("logged 2"); });
-  worker.join();
-
-  EXPECT_THAT(logger.GetLines(), ElementsAre("logged 1"));
-}
-
-TEST(ThreadCaptureTest, ManualThreadCrossing) {
-  LogTextSingleThread logger;
-  LogText::Log("logged 1");
-
-  const LogText::ThreadBridge bridge;
-  std::thread worker([&bridge] {
-    LogText::CrossThreads logger(bridge);
-    LogText::Log("logged 2");
-  });
-  worker.join();
-
-  EXPECT_THAT(logger.GetLines(), ElementsAre("logged 1", "logged 2"));
-}
+using testing::CallbackQueue;
+using testing::LogText;
+using testing::LogTextMultiThread;
+using testing::LogTextSingleThread;
+using testing::LogValues;
+using testing::LogValuesMultiThread;
 
 TEST(ThreadCrosserTest, WrapCallIsFineWithoutLogger) {
   bool called = false;
@@ -293,36 +244,32 @@ TEST(ThreadCrosserTest, ReverseOrderOfLoggersOnStack) {
   EXPECT_THAT(logger3.GetLines(), ElementsAre());
 }
 
-TEST(ThreadCrosserTest, CanonicalGlobalOverride) {
+TEST(ThreadCrosserTest, ManualCrosserOverride) {
   LogTextMultiThread logger;
-  ThreadCrosser::SetGlobalOverride set_override;
+  const ThreadCrosser::SetOverride override_point;
 
-  std::thread unwrapped_worker([] {
-    ThreadCrosser::UseGlobalOverride use_override;
-    use_override.Call([] {
-      LogText::Log("logged 1");
-    });
+  std::thread unwrapped_worker([&override_point] {
+    override_point.Call([] { LogText::Log("logged 1"); });
   });
   unwrapped_worker.join();
 
   EXPECT_THAT(logger.GetLines(), ElementsAre("logged 1"));
 }
 
-TEST(ThreadCrosserTest, GlobalOverrideIndependentOfNormalScope) {
+TEST(ThreadCrosserTest, ManualOverrideIndependentOfNormalScope) {
   LogTextMultiThread text_logger1;
-  ThreadCrosser::SetGlobalOverride set_override;
+  const ThreadCrosser::SetOverride override_point;
 
-  std::thread unwrapped_worker([] {
-    ThreadCrosser::UseGlobalOverride use_override;
+  std::thread unwrapped_worker([&override_point] {
     LogTextMultiThread text_logger2;
     LogValuesMultiThread count_logger;
     // Global override of LogText but not LogValues.
-    use_override.Call([] {
+    override_point.Call([] {
       LogText::Log("logged 1");
       LogValues::Count(1);
     });
     // Local scope supercedes global override of LogText.
-    use_override.Call(ThreadCrosser::WrapCall([] {
+    override_point.Call(ThreadCrosser::WrapCall([] {
       LogText::Log("logged 2");
       LogValues::Count(2);
     }));

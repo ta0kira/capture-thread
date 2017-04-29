@@ -26,7 +26,8 @@ namespace capture_thread {
 // Automatically makes an object shared within a single thread to be shared with
 // another thread. Use ThreadCapture::AutoThreadCrosser to add the functionality
 // to an object, then use ThreadCrosser::WrapCall to enable sharing for a
-// specific callback.
+// specific callback. All nested classes are thread-safe and can be made const
+// without losing functionality.
 class ThreadCrosser {
  public:
   // NOTE: The return of WrapCall (and its copies) must never outlive the scope
@@ -34,54 +35,28 @@ class ThreadCrosser {
   // threads. This is because WrapCall captures elements of the stack.
   static std::function<void()> WrapCall(std::function<void()> call);
 
-#ifdef CAPTURE_THREAD_EXPERIMENTAL
-
-  // Sets a global override based on the current scope. Use this *only* in
-  // situations where you cannot pass a function that has been wrapped with
-  // WrapCall to a thread. (For example, if you are using another framework that
-  // manages its own threads, and cannot pass a std::function from the main
-  // thread to the worker thread.) Instantiate this class to capture the current
-  // scope, and use UseGlobalOverride to wrap calls.
-  // NOTE: Use with caution! This class is not thread-safe and should therefore
-  // be instantiated no more than once, no matter what.
-  class SetGlobalOverride {
+  // Sets an override point for the current scope. Use this in cases where
+  // WrapCall isn't practical, e.g., if you're using a framework that manages
+  // it's own threads and has a restrictive API. Create a stack-allocated
+  // instance in the main thread, then use Call in the worker thread to wrap and
+  // call a function that should use the scope set at the override point.
+  class SetOverride {
    public:
-    SetGlobalOverride();
-    ~SetGlobalOverride();
+    inline SetOverride() : current_(GetCurrent()) {}
 
-   private:
-    SetGlobalOverride(const SetGlobalOverride&) = delete;
-    SetGlobalOverride(SetGlobalOverride&&) = delete;
-    SetGlobalOverride& operator=(const SetGlobalOverride&) = delete;
-    SetGlobalOverride& operator=(SetGlobalOverride&&) = delete;
-    void* operator new(std::size_t size) = delete;
-
-    ThreadCrosser* const current_;
-  };
-
-  // Allows the current thread to access the scope override set in the main
-  // thread with SetGlobalOverride. Even though SetGlobalOverride isn't thread-
-  // safe, this class is; *however*, instances of this class must never
-  // outlive any SetGlobalOverride instance.
-  class UseGlobalOverride {
-   public:
-    UseGlobalOverride();
-    ~UseGlobalOverride();
-
-    // Wraps the call with the current global override, then calls it.
+    // Wraps the call with the current override, then calls it.
     void Call(std::function<void()> call) const;
 
    private:
-    UseGlobalOverride(const UseGlobalOverride&) = delete;
-    UseGlobalOverride(UseGlobalOverride&&) = delete;
-    UseGlobalOverride& operator=(const UseGlobalOverride&) = delete;
-    UseGlobalOverride& operator=(UseGlobalOverride&&) = delete;
+    SetOverride(const SetOverride&) = delete;
+    SetOverride(SetOverride&&) = delete;
+    SetOverride& operator=(const SetOverride&) = delete;
+    SetOverride& operator=(SetOverride&&) = delete;
     void* operator new(std::size_t size) = delete;
 
+    friend class UseOverride;
     ThreadCrosser* const current_;
   };
-
-#endif  // CAPTURE_THREAD_EXPERIMENTAL
 
  private:
   ThreadCrosser(const ThreadCrosser&) = delete;
@@ -101,7 +76,26 @@ class ThreadCrosser {
 
   virtual ThreadCrosser* Parent() const = 0;
 
-  class ScopedOverride;
+  class ScopedCrosser;
+
+  class DelegateCrosser {
+   public:
+    explicit inline DelegateCrosser(const ScopedCrosser& crosser)
+        : parent_(GetCurrent()) {
+      SetCurrent(crosser.current_);
+    }
+
+    inline ~DelegateCrosser() { SetCurrent(parent_); }
+
+   private:
+    DelegateCrosser(const DelegateCrosser&) = delete;
+    DelegateCrosser(DelegateCrosser&&) = delete;
+    DelegateCrosser& operator=(const DelegateCrosser&) = delete;
+    DelegateCrosser& operator=(DelegateCrosser&&) = delete;
+    void* operator new(std::size_t size) = delete;
+
+    ThreadCrosser* const parent_;
+  };
 
   class ScopedCrosser {
    public:
@@ -121,28 +115,9 @@ class ThreadCrosser {
     ScopedCrosser& operator=(ScopedCrosser&&) = delete;
     void* operator new(std::size_t size) = delete;
 
-    friend class ScopedOverride;
+    friend class DelegateCrosser;
     ThreadCrosser* const parent_;
     ThreadCrosser* const current_;
-  };
-
-  class ScopedOverride {
-   public:
-    explicit inline ScopedOverride(const ScopedCrosser& crosser)
-        : parent_(GetCurrent()) {
-      SetCurrent(crosser.current_);
-    }
-
-    inline ~ScopedOverride() { SetCurrent(parent_); }
-
-   private:
-    ScopedOverride(const ScopedOverride&) = delete;
-    ScopedOverride(ScopedOverride&&) = delete;
-    ScopedOverride& operator=(const ScopedOverride&) = delete;
-    ScopedOverride& operator=(ScopedOverride&&) = delete;
-    void* operator new(std::size_t size) = delete;
-
-    ThreadCrosser* const parent_;
   };
 
   static std::function<void()> WrapCallRec(std::function<void()> call,
