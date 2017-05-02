@@ -16,12 +16,6 @@ limitations under the License.
 
 // Author: Kevin P. Barry [ta0kira@gmail.com] [kevinbarry@google.com]
 
-#include <condition_variable>
-#include <functional>
-#include <list>
-#include <mutex>
-#include <queue>
-#include <string>
 #include <thread>
 
 #include <gmock/gmock.h>
@@ -29,7 +23,6 @@ limitations under the License.
 
 #include "thread-capture.h"
 
-#include "callback-queue.h"
 #include "log-text.h"
 #include "log-values.h"
 
@@ -37,7 +30,6 @@ using testing::ElementsAre;
 
 namespace capture_thread {
 
-using testing::CallbackQueue;
 using testing::LogText;
 using testing::LogTextSingleThread;
 using testing::LogValues;
