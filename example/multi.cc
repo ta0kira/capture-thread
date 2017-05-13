@@ -26,6 +26,7 @@ limitations under the License.
 #include <thread>
 
 #include "thread-capture.h"
+#include "thread-crosser.h"
 
 using capture_thread::ThreadCapture;
 using capture_thread::ThreadCrosser;
@@ -33,8 +34,8 @@ using capture_thread::ThreadCrosser;
 // Example implementation, 1 of 2.
 class LogTypeOne : public ThreadCapture<LogTypeOne> {
  public:
-  explicit LogTypeOne(const std::string& value) :
-      value_(value), cross_and_capture_to_(this) {}
+  explicit LogTypeOne(const std::string& value)
+      : value_(value), cross_and_capture_to_(this) {}
 
   static void Show() {
     if (GetCurrent()) {
@@ -43,7 +44,7 @@ class LogTypeOne : public ThreadCapture<LogTypeOne> {
   }
 
  private:
-  void ShowValue() const  { std::cout << value_ << std::endl; }
+  void ShowValue() const { std::cout << value_ << std::endl; }
 
   const std::string value_;
   const AutoThreadCrosser cross_and_capture_to_;
@@ -52,8 +53,8 @@ class LogTypeOne : public ThreadCapture<LogTypeOne> {
 // Example implementation, 2 of 2.
 class LogTypeTwo : public ThreadCapture<LogTypeTwo> {
  public:
-  explicit LogTypeTwo(const std::string& value) :
-      value_(value), cross_and_capture_to_(this) {}
+  explicit LogTypeTwo(const std::string& value)
+      : value_(value), cross_and_capture_to_(this) {}
 
   static void Show() {
     if (GetCurrent()) {
@@ -62,7 +63,7 @@ class LogTypeTwo : public ThreadCapture<LogTypeTwo> {
   }
 
  private:
-  void ShowValue() const  { std::cout << value_ << std::endl; }
+  void ShowValue() const { std::cout << value_ << std::endl; }
 
   const std::string value_;
   const AutoThreadCrosser cross_and_capture_to_;
@@ -86,8 +87,7 @@ int main() {
 
   // The same applies to ThreadCrosser::SetOverride::Call. (See framework.cc.)
   const ThreadCrosser::SetOverride override_point;
-  std::thread worker2([&override_point] {
-    override_point.Call(&WorkerThread);
-  });
+  std::thread worker2(
+      [&override_point] { override_point.Call(&WorkerThread); });
   worker2.join();
 }
