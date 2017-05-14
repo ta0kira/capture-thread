@@ -16,45 +16,9 @@ limitations under the License.
 
 // Author: Kevin P. Barry [ta0kira@gmail.com] [kevinbarry@google.com]
 
-#include <cassert>
-
 #include "thread-crosser.h"
 
 namespace capture_thread {
-
-// static
-std::function<void()> ThreadCrosser::WrapCall(std::function<void()> call) {
-  return WrapFunction(call);
-}
-
-// static
-std::function<void()> ThreadCrosser::WrapCall(std::function<void()> call,
-                                              const ThreadCrosser* current) {
-  if (call && current) {
-    return current->WrapWithCrosser(WrapCallRec(std::move(call), current));
-  } else {
-    return call;
-  }
-}
-
-// static
-std::function<void()> ThreadCrosser::WrapCallRec(std::function<void()> call,
-                                                 const ThreadCrosser* current) {
-  if (current) {
-    return WrapCallRec(current->WrapWithContext(std::move(call)),
-                       current->Parent());
-  } else {
-    return call;
-  }
-}
-
-void ThreadCrosser::SetOverride::Call(std::function<void()> call) const {
-  call = WrapCallRec(std::move(call), current_);
-  assert(call);
-  if (call) {
-    call();
-  }
-}
 
 // static
 thread_local ThreadCrosser* ThreadCrosser::current_(nullptr);

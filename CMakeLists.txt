@@ -36,12 +36,6 @@ target_link_libraries(async
   capture-thread
   ${PTHREAD_LIBRARY})
 
-add_executable(framework
-  example/framework.cc)
-target_link_libraries(framework
-  capture-thread
-  ${PTHREAD_LIBRARY})
-
 add_executable(inherit
   example/inherit.cc)
 target_link_libraries(inherit
@@ -74,6 +68,12 @@ add_executable(simple
   example/simple.cc)
 target_link_libraries(
   simple
+  capture-thread)
+
+add_executable(speed
+  example/speed.cc)
+target_link_libraries(
+  speed
   capture-thread)
 
 add_executable(threaded
