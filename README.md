@@ -39,8 +39,8 @@ due to ownership and thread-safety issues.
 
 This library establishes the following idiom *(using logging as an example)*:
 
-1.  The instrumentation is 100% passive unless it is explicitly enabled.
-    *(For example, logging points that by default just print to `std::cerr`.)*
+1.  The instrumentation is 100% passive unless it is explicitly enabled. *(For
+    example, logging points that by default just print to `std::cerr`.)*
 
 2.  Instrumentation is enabled in the current thread by *instantiating* an
     implementation, and only remains enabled until that instance goes out of
@@ -110,6 +110,34 @@ Thread Library**:
     In this example, the instrumentation is created in `f`, but goes out of
     scope before `g` is called. In this case, `g` just uses the default behavior
     for `MyLogger::Log`.
+
+    This is actually dangerous if you return a wrapped function in a way that
+    changes the scope:
+
+    ```c++
+    // Fine, because no wrapping is done.
+    std::function<void()> f() {
+      MyLogger capture_messages;
+      return [] { MyLogger::Log("f was called"); };
+    }
+
+    // Fine, because no instrumentation goes out of scope.
+    std::function<void()> g() {
+      return ThreadCrosser::WrapCall([] { MyLogger::Log("g was called"); });
+    }
+
+    // DANGER! capture_messages goes out of scope, invalidating the function.
+    std::function<void()> h() {
+      MyLogger capture_messages;
+      return ThreadCrosser::WrapCall([] { MyLogger::Log("h was called"); });
+    }
+
+    int main() {
+      f()();  // Fine.
+      g()();  // Fine.
+      h()();  // SIGSEGV!
+    }
+    ```
 
 ## Quick Start
 
